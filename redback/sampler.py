@@ -54,7 +54,7 @@ def fit_model(
                 f"output format {model_kwargs['output_format']}. These should be the same.")
 
     prior = prior or bilby.prior.PriorDict(filename=f"{dirname}/Priors/{model}.prior")
-    outdir = outdir or f"{transient.directory_structure.directory_path}/{model.__name__}"
+    outdir = outdir or f"{transient.directory_structure.directory_path}/{model.__name__}/{model_kwargs['base_model']}"
     Path(outdir).mkdir(parents=True, exist_ok=True)
     label = label or transient.name
 
