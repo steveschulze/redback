@@ -8,8 +8,116 @@ import pandas as pd
 
 import redback
 from redback.plotting import \
-    LuminosityPlotter, FluxDensityPlotter, IntegratedFluxPlotter, MagnitudePlotter, IntegratedFluxOpticalPlotter
+    LuminosityPlotter, FluxDensityPlotter, IntegratedFluxPlotter, MagnitudePlotter, \
+     IntegratedFluxOpticalPlotter, SpectrumPlotter
 
+class Spectrum(object):
+    def __init__(self, angstroms: np.ndarray, flux_density: np.ndarray, flux_density_err: np.ndarray,
+                 time: str = None, name: str = '', **kwargs) -> None:
+        """
+        A class to store spectral data.
+
+        :param angstroms: Wavelength in angstroms.
+        :param flux_density: flux density in ergs/s/cm^2/angstrom.
+        :param flux_density_err: flux density error in ergs/s/cm^2/angstrom.
+        :param time: Time of the spectrum. Could be a phase or time since burst. Only used for plotting.
+        :param name: Name of the spectrum.
+        """
+
+        self.angstroms = angstroms
+        self.flux_density = flux_density
+        self.flux_density_err = flux_density_err
+        self.time = time
+        self.name = name
+        if self.time is None:
+            self.plot_with_time_label = False
+        else:
+            self.plot_with_time_label = True
+        self.directory_structure = redback.get_data.directory.spectrum_directory_structure(transient=name)
+        self.data_mode = 'spectrum'
+
+    @property
+    def xlabel(self) -> str:
+        """
+        :return: xlabel used in plotting functions
+        :rtype: str
+        """
+        return r'Wavelength [$\mathrm{\AA}$]'
+
+    @property
+    def ylabel(self) -> str:
+        """
+        :return: ylabel used in plotting functions
+        :rtype: str
+        """
+        return r'Flux ($10^{-17}$ erg s$^{-1}$ cm$^{-2}$ $\mathrm{\AA}$)'
+
+    def plot_data(self, axes: matplotlib.axes.Axes = None, filename: str = None, outdir: str = None, save: bool = True,
+            show: bool = True, color: str = 'k', **kwargs) -> matplotlib.axes.Axes:
+        """Plots the Transient data and returns Axes.
+
+        :param axes: Matplotlib axes to plot the lightcurve into. Useful for user specific modifications to the plot.
+        :param filename: Name of the file to be plotted in.
+        :param outdir: The directory in which to save the file in.
+        :param save: Whether to save the plot. (Default value = True)
+        :param show: Whether to show the plot. (Default value = True)
+        :param color: Color of the data.
+        :param kwargs: Additional keyword arguments to pass in the Plotter methods.
+        Available in the online documentation under at `redback.plotting.Plotter`.
+        `print(Transient.plot_data.__doc__)` to see all options!
+        :return: The axes with the plot.
+        """
+
+        plotter = SpectrumPlotter(spectrum=self, color=color, filename=filename, outdir=outdir, **kwargs)
+        return plotter.plot_data(axes=axes, save=save, show=show)
+
+    def plot_spectrum(
+            self, model: callable, filename: str = None, outdir: str = None, axes: matplotlib.axes.Axes = None,
+            save: bool = True, show: bool = True, random_models: int = 100, posterior: pd.DataFrame = None,
+            model_kwargs: dict = None, **kwargs: None) -> matplotlib.axes.Axes:
+        """
+        :param model: The model used to plot the lightcurve.
+        :param filename: The output filename. Otherwise, use default which starts with the name
+                         attribute and ends with *lightcurve.png.
+        :param axes: Axes to plot in if given.
+        :param save:Whether to save the plot.
+        :param show: Whether to show the plot.
+        :param random_models: Number of random posterior samples plotted faintly. (Default value = 100)
+        :param posterior: Posterior distribution to which to draw samples from. Is optional but must be given.
+        :param outdir: Out directory in which to save the plot. Default is the current working directory.
+        :param model_kwargs: Additional keyword arguments to be passed into the model.
+        :param kwargs: Additional keyword arguments to pass in the Plotter methods.
+        Available in the online documentation under at `redback.plotting.Plotter`.
+        `print(Transient.plot_lightcurve.__doc__)` to see all options!
+        :return: The axes.
+        """
+        plotter = SpectrumPlotter(
+            spectrum=self, model=model, filename=filename, outdir=outdir,
+            posterior=posterior, model_kwargs=model_kwargs, random_models=random_models, **kwargs)
+        return plotter.plot_spectrum(axes=axes, save=save, show=show)
+
+    def plot_residual(self, model: callable, filename: str = None, outdir: str = None, axes: matplotlib.axes.Axes = None,
+                      save: bool = True, show: bool = True, posterior: pd.DataFrame = None,
+                      model_kwargs: dict = None, **kwargs: None) -> matplotlib.axes.Axes:
+        """
+        :param model: The model used to plot the lightcurve.
+        :param filename: The output filename. Otherwise, use default which starts with the name
+                         attribute and ends with *lightcurve.png.
+        :param axes: Axes to plot in if given.
+        :param save:Whether to save the plot.
+        :param show: Whether to show the plot.
+        :param posterior: Posterior distribution to which to draw samples from. Is optional but must be given.
+        :param outdir: Out directory in which to save the plot. Default is the current working directory.
+        :param model_kwargs: Additional keyword arguments to be passed into the model.
+        :param kwargs: Additional keyword arguments to pass in the Plotter methods.
+        Available in the online documentation under at `redback.plotting.Plotter`.
+        `print(Transient.plot_residual.__doc__)` to see all options!
+        :return: The axes.
+        """
+        plotter = SpectrumPlotter(
+            spectrum=self, model=model, filename=filename, outdir=outdir,
+            posterior=posterior, model_kwargs=model_kwargs, **kwargs)
+        return plotter.plot_residuals(axes=axes, save=save, show=show)
 
 class Transient(object):
     DATA_MODES = ['luminosity', 'flux', 'flux_density', 'magnitude', 'counts', 'ttes']
@@ -38,7 +146,7 @@ class Transient(object):
             ttes: np.ndarray = None, bin_size: float = None, redshift: float = np.nan, data_mode: str = None,
             name: str = '', photon_index: float = np.nan, use_phase_model: bool = False,
             optical_data: bool = False, frequency: np.ndarray = None, system: np.ndarray = None, bands: np.ndarray = None,
-            active_bands: Union[np.ndarray, str] = None, **kwargs: None) -> None:
+            active_bands: Union[np.ndarray, str] = None, plotting_order: Union[np.ndarray, str] = None, **kwargs: None) -> None:
         """This is a general constructor for the Transient class. Note that you only need to give data corresponding to
         the data mode you are using. For luminosity data provide times in the rest frame, if using a phase model
         provide time in MJD, else use the default time (observer frame).
@@ -98,6 +206,8 @@ class Transient(object):
         :param active_bands: List or array of active bands to be used in the analysis.
                              Use all available bands if 'all' is given.
         :type active_bands: Union[list, np.ndarray], optional
+        :param plotting_order: Order in which to plot the bands/and how unique bands are stored.
+        :type plotting_order: Union[np.ndarray, str], optional
         :param kwargs: Additional callables:
                        bands_to_frequency: Conversion function to convert a list of bands to frequencies.
                                            Use redback.utils.bands_to_frequency if not given.
@@ -142,6 +252,7 @@ class Transient(object):
         self.name = name
         self.use_phase_model = use_phase_model
         self.optical_data = optical_data
+        self.plotting_order = plotting_order
 
         self.meta_data = None
         self.photon_index = photon_index
@@ -179,7 +290,7 @@ class Transient(object):
     @classmethod
     def from_lasair_data(
             cls, name: str, data_mode: str = "magnitude", active_bands: Union[np.ndarray, str] = 'all',
-            use_phase_model: bool = False) -> Transient:
+            use_phase_model: bool = False, plotting_order: Union[np.ndarray, str] = None) -> Transient:
         """Constructor method to built object from LASAIR data.
 
         :param name: Name of the transient.
@@ -189,6 +300,8 @@ class Transient(object):
         :param active_bands: Sets active bands based on array given.
                              If argument is 'all', all unique bands in `self.bands` will be used.
         :type active_bands: Union[np.ndarray, str]
+        :param plotting_order: Order in which to plot the bands/and how unique bands are stored.
+        :type plotting_order: Union[np.ndarray, str], optional
         :param use_phase_model: Whether to use a phase model.
         :type use_phase_model: bool, optional
 
@@ -214,12 +327,12 @@ class Transient(object):
         return cls(name=name, data_mode=data_mode, time=time_days, time_err=None, time_mjd=time_mjd,
                    flux_density=flux_density, flux_density_err=flux_density_err, magnitude=magnitude,
                    magnitude_err=magnitude_err, flux=flux, flux_err=flux_err, bands=bands, active_bands=active_bands,
-                   use_phase_model=use_phase_model, optical_data=True)
+                   use_phase_model=use_phase_model, optical_data=True, plotting_order=plotting_order)
 
     @classmethod
     def from_simulated_optical_data(
             cls, name: str, data_mode: str = "magnitude", active_bands: Union[np.ndarray, str] = 'all',
-            use_phase_model: bool = False) -> Transient:
+            plotting_order: Union[np.ndarray, str] = None, use_phase_model: bool = False) -> Transient:
         """Constructor method to built object from SimulatedOpticalTransient.
 
         :param name: Name of the transient.
@@ -229,6 +342,8 @@ class Transient(object):
         :param active_bands: Sets active bands based on array given.
                              If argument is 'all', all unique bands in `self.bands` will be used.
         :type active_bands: Union[np.ndarray, str]
+        :param plotting_order: Order in which to plot the bands/and how unique bands are stored.
+        :type plotting_order: Union[np.ndarray, str], optional
         :param use_phase_model: Whether to use a phase model.
         :type use_phase_model: bool, optional
 
@@ -250,7 +365,7 @@ class Transient(object):
         return cls(name=name, data_mode=data_mode, time=time_days, time_err=None, time_mjd=time_mjd,
                    flux_density=flux_density, flux_density_err=flux_density_err, magnitude=magnitude,
                    magnitude_err=magnitude_err, flux=flux, flux_err=flux_err, bands=bands, active_bands=active_bands,
-                   use_phase_model=use_phase_model, optical_data=True)
+                   use_phase_model=use_phase_model, optical_data=True, plotting_order=plotting_order)
 
     @property
     def _time_attribute_name(self) -> str:
@@ -501,7 +616,10 @@ class Transient(object):
         :return: All bands that we get from the data, eliminating all duplicates.
         :rtype: np.ndarray
         """
-        return np.unique(self.bands)
+        if self.plotting_order is not None:
+            return self.plotting_order
+        else:
+            return np.unique(self.bands)
 
     @property
     def unique_frequencies(self) -> np.ndarray:
@@ -789,7 +907,8 @@ class OpticalTransient(Transient):
             flux_density_err: np.ndarray = None, magnitude: np.ndarray = None, magnitude_err: np.ndarray = None,
             redshift: float = np.nan, photon_index: float = np.nan, frequency: np.ndarray = None,
             bands: np.ndarray = None, system: np.ndarray = None, active_bands: Union[np.ndarray, str] = 'all',
-            use_phase_model: bool = False, optical_data:bool = True, **kwargs: None) -> None:
+            plotting_order: Union[np.ndarray, str] = None, use_phase_model: bool = False,
+            optical_data:bool = True, **kwargs: None) -> None:
         """This is a general constructor for the Transient class. Note that you only need to give data corresponding to
         the data mode you are using. For luminosity data provide times in the rest frame, if using a phase model
         provide time in MJD, else use the default time (observer frame).
@@ -839,6 +958,8 @@ class OpticalTransient(Transient):
         :param active_bands: List or array of active bands to be used in the analysis.
                              Use all available bands if 'all' is given.
         :type active_bands: Union[list, np.ndarray], optional
+        :param plotting_order: Order in which to plot the bands/and how unique bands are stored.
+        :type plotting_order: Union[np.ndarray, str], optional
         :param use_phase_model: Whether we are using a phase model.
         :type use_phase_model: bool, optional
         :param optical_data: Whether we are fitting optical data, useful for plotting.
@@ -855,14 +976,15 @@ class OpticalTransient(Transient):
                          flux=flux, flux_err=flux_err, redshift=redshift, photon_index=photon_index,
                          flux_density=flux_density, flux_density_err=flux_density_err, magnitude=magnitude,
                          magnitude_err=magnitude_err, data_mode=data_mode, name=name,
-                         use_phase_model=use_phase_model, optical_data=optical_data, system=system, bands=bands,
+                         use_phase_model=use_phase_model, optical_data=optical_data,
+                         system=system, bands=bands, plotting_order=plotting_order,
                          active_bands=active_bands, **kwargs)
         self.directory_structure = None
 
     @classmethod
     def from_open_access_catalogue(
             cls, name: str, data_mode: str = "magnitude", active_bands: Union[np.ndarray, str] = 'all',
-            use_phase_model: bool = False) -> OpticalTransient:
+            plotting_order: Union[np.ndarray, str] = None, use_phase_model: bool = False) -> OpticalTransient:
         """Constructor method to built object from Open Access Catalogue
 
         :param name: Name of the transient.
@@ -873,6 +995,8 @@ class OpticalTransient(Transient):
             Sets active bands based on array given.
             If argument is 'all', all unique bands in `self.bands` will be used.
         :type active_bands: Union[np.ndarray, str]
+        :param plotting_order: Order in which to plot the bands/and how unique bands are stored.
+        :type plotting_order: Union[np.ndarray, str], optional
         :param use_phase_model: Whether to use a phase model.
         :type use_phase_model: bool, optional
 
@@ -890,7 +1014,8 @@ class OpticalTransient(Transient):
         return cls(name=name, data_mode=data_mode, time=time_days, time_err=None, time_mjd=time_mjd,
                    flux_density=flux_density, flux_density_err=flux_density_err, magnitude=magnitude,
                    magnitude_err=magnitude_err, bands=bands, system=system, active_bands=active_bands,
-                   use_phase_model=use_phase_model, optical_data=True, flux=flux, flux_err=flux_err)
+                   use_phase_model=use_phase_model, optical_data=True, flux=flux, flux_err=flux_err,
+                   plotting_order=plotting_order)
 
     @property
     def event_table(self) -> str:
